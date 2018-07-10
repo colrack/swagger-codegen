@@ -9,7 +9,8 @@
 -type init_opts()  :: {
     Operations :: operations(),
     LogicHandler :: atom(),
-    ValidatorState :: jesse_state:state()
+    App :: atom(),
+    LogicHandlerValidatorKey :: atom()
 }.
 
 -export_type([init_opts/0]).
@@ -22,6 +23,9 @@
 
 get_paths(LogicHandler) ->
     ValidatorState = prepare_validator(),
+    {ok, App} = application:get_application(?MODULE),
+    LogicHandlerValidatorKey = list_to_atom(atom_to_list(LogicHandler) ++ "_validator") ,
+    application:set_env(App, LogicHandlerValidatorKey, ValidatorState),
     PreparedPaths = maps:fold(
         fun(Path, #{operations := Operations, handler := Handler}, Acc) ->
             [{Path, Handler, Operations} | Acc]
@@ -31,7 +35,7 @@ get_paths(LogicHandler) ->
     ),
     [
         {'_',
-            [{P, H, {O, LogicHandler, ValidatorState}} || {P, H, O} <- PreparedPaths]
+            [{P, H, {O, LogicHandler, App, LogicHandlerValidatorKey}} || {P, H, O} <- PreparedPaths]
         }
     ].
 

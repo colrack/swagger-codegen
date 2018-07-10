@@ -29,4 +29,4 @@ handle_request(OperationID, Req, Context) ->
         "Got not implemented request to process: ~p~n",
         [{OperationID, Req, Context}]
     ),
-    {501, [], #{}}.
+    {501, #{}, #{}}.

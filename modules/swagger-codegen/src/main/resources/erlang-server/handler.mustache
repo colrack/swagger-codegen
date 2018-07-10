@@ -3,14 +3,12 @@
 
 %% Cowboy REST callbacks
 -export([allowed_methods/2]).
--export([init/3]).
--export([rest_init/2]).
+-export([init/2]).
 -export([allow_missing_post/2]).
 -export([content_types_accepted/2]).
 -export([content_types_provided/2]).
 -export([delete_resource/2]).
 -export([is_authorized/2]).
--export([known_content_type/2]).
 -export([malformed_request/2]).
 -export([valid_content_headers/2]).
 -export([valid_entity_length/2]).
@@ -27,18 +25,14 @@
 
 -type state() :: state().
 
--spec init(TransportName :: atom(), Req :: cowboy_req:req(), Opts :: {{packageName}}_router:init_opts()) ->
-    {upgrade, protocol, cowboy_rest, Req :: cowboy_req:req(), Opts :: {{packageName}}_router:init_opts()}.
+-spec init(Req :: cowboy_req:req(), Opts :: {{packageName}}_router:init_opts()) ->
+    {cowboy_rest, Req :: cowboy_req:req(), State :: state()}.
 
-init(_Transport, Req, Opts) ->
-    {upgrade, protocol, cowboy_rest, Req, Opts}.
-
--spec rest_init(Req :: cowboy_req:req(), Opts :: {{packageName}}_router:init_opts()) ->
-    {ok, Req :: cowboy_req:req(), State :: state()}.
-
-rest_init(Req0, {Operations, LogicHandler, ValidatorState}) ->
-    {Method, Req} = cowboy_req:method(Req0),
+init(Req, {Operations, LogicHandler, App, ValidatorKey}) ->
+    Method = cowboy_req:method(Req),
     OperationID = maps:get(Method, Operations, undefined),
+
+    {ok, ValidatorState} = application:get_env(App, ValidatorKey),
 
     error_logger:info_msg("Attempt to process operation: ~p", [OperationID]),
 
@@ -47,7 +41,7 @@ rest_init(Req0, {Operations, LogicHandler, ValidatorState}) ->
         logic_handler = LogicHandler,
         validator_state = ValidatorState
     },
-    {ok, Req, State}.
+    {cowboy_rest, Req, State}.
 
 -spec allowed_methods(Req :: cowboy_req:req(), State :: state()) ->
     {Value :: [binary()], Req :: cowboy_req:req(), State :: state()}.
@@ -162,12 +156,6 @@ allow_missing_post(Req, State) ->
 delete_resource(Req, State) ->
     handle_request_json(Req, State).
 
--spec known_content_type(Req :: cowboy_req:req(), State :: state()) ->
-    {Value :: true, Req :: cowboy_req:req(), State :: state()}.
-
-known_content_type(Req, State) ->
-    {true, Req, State}.
-
 -spec valid_entity_length(Req :: cowboy_req:req(), State :: state()) ->
     {Value :: true, Req :: cowboy_req:req(), State :: state()}.
 
@@ -184,7 +172,7 @@ valid_entity_length(Req, State) ->
 
 -type result_error() :: {error, Reason :: any()}.
 
--type processed_response() :: {halt, cowboy_req:req(), state()}.
+-type processed_response() :: {stop, cowboy_req:req(), state()}.
 
 -spec process_response(result_ok() | result_error(), cowboy_req:req(), state()) ->
     processed_response().
@@ -192,16 +180,16 @@ valid_entity_length(Req, State) ->
 process_response(Response, Req0, State = #state{operation_id = OperationID}) ->
     case Response of
         {ok, {Code, Headers, Body}} ->
-            {ok, Req} = cowboy_req:reply(Code, Headers, Body, Req0),
-            {halt, Req, State};
+            Req = cowboy_req:reply(Code, Headers, Body, Req0),
+            {stop, Req, State};
         {error, Message} ->
             error_logger:error_msg("Unable to process request for ~p: ~p", [OperationID, Message]),
 
-            {ok, Req} = cowboy_req:reply(400, Req0),
-            {halt, Req, State}
+            Req = cowboy_req:reply(400, Req0),
+            {stop, Req, State}
     end.
 
--spec handle_request_json(cowboy_req:req(), state()) -> {halt, cowboy_req:req(), state()}.
+-spec handle_request_json(cowboy_req:req(), state()) -> {stop, cowboy_req:req(), state()}.
 
 handle_request_json(
     Req0,
