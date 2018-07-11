@@ -18,8 +18,6 @@
 
 -record(state, {
     operation_id :: {{packageName}}_api:operation_id(),
-    logic_handler :: atom(),
-    validator_state :: jesse_state:state(),
     context=#{} :: #{}
 }).
 
@@ -28,18 +26,14 @@
 -spec init(Req :: cowboy_req:req(), Opts :: {{packageName}}_router:init_opts()) ->
     {cowboy_rest, Req :: cowboy_req:req(), State :: state()}.
 
-init(Req, {Operations, LogicHandler, App, ValidatorKey}) ->
+init(Req, Operations) ->
     Method = cowboy_req:method(Req),
     OperationID = maps:get(Method, Operations, undefined),
-
-    {ok, ValidatorState} = application:get_env(App, ValidatorKey),
 
     error_logger:info_msg("Attempt to process operation: ~p", [OperationID]),
 
     State = #state{
-        operation_id = OperationID,
-        logic_handler = LogicHandler,
-        validator_state = ValidatorState
+        operation_id = OperationID
     },
     {cowboy_rest, Req, State}.
 
@@ -69,11 +63,11 @@ allowed_methods(Req, State) ->
 is_authorized(
     Req0,
     State = #state{
-        operation_id = '{{operationId}}' = OperationID,
-        logic_handler = LogicHandler
+        operation_id = '{{operationId}}' = OperationID
     }
 ) ->
   {{#isApiKey}}
+    LogicHandler = {{packageName}}_default_logic_handler,
     From = {{#isKeyInQuery}}qs_val{{/isKeyInQuery}}{{#isKeyInHeader}}header{{/isKeyInHeader}},
     Result = {{packageName}}_auth:authorize_api_key(
         LogicHandler,
@@ -195,11 +189,13 @@ handle_request_json(
     Req0,
     State = #state{
         operation_id = OperationID,
-        logic_handler = LogicHandler,
-        validator_state = ValidatorState,
         context = Context
     }
 ) ->
+    {ok, App} = application:get_application(?MODULE),
+    LogicHandler = {{packageName}}_default_logic_handler,
+    {ok, ValidatorState} = application:get_env(App, LogicHandler),
+
     case {{packageName}}_api:populate_request(OperationID, Req0, ValidatorState) of
         {ok, Populated, Req1} ->
             {Code, Headers, Body} = {{packageName}}_logic_handler:handle_request(
