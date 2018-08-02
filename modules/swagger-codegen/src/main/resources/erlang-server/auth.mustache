@@ -13,27 +13,34 @@
 
 authorize_api_key(LogicHandler, OperationID, From, KeyParam, Req0) ->
     {ApiKey, Req} = get_api_key(From, KeyParam, Req0),
-    case ApiKey of
-        undefined ->
-            AuthHeader = <<"">>,
-            {false, AuthHeader, Req};
-        _ ->
-            Result = {{packageName}}_logic_handler:authorize_api_key(
-                LogicHandler,
-                OperationID,
-                ApiKey
-            ),
-            case Result of
-              {{#authMethods}}
-                {{#isApiKey}}
-                {true, Context}  ->
-                    {true, Context, Req};
-                {{/isApiKey}}
-              {{/authMethods}}
-                false ->
-                    AuthHeader = <<"">>,
-                    {false, AuthHeader, Req}
-            end
+    {ok, AppName} = application:get_application(?MODULE),
+    ApiKeyEnabled = application:get_env(AppName, http_api_key_enabled, true),
+    
+    case ApiKeyEnabled of
+        true ->
+            case ApiKey of
+                undefined ->
+                     AuthHeader = <<"">>,
+                    {false, AuthHeader, Req};
+                _ ->
+                    Result = {{packageName}}_logic_handler:authorize_api_key(
+                        LogicHandler,
+                        OperationID,
+                        ApiKey
+                    ),
+                    case Result of
+                      {{#authMethods}}
+                        {{#isApiKey}}
+                        {true, Context}  ->
+                            {true, Context, Req};
+                        {{/isApiKey}}
+                      {{/authMethods}}
+                        false ->
+                            AuthHeader = <<"">>,
+                            {false, AuthHeader, Req}
+                    end
+            end;
+        _ -> {true, #{}, Req}
     end.
 
 get_api_key(header, KeyParam, Req) ->
