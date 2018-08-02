@@ -193,8 +193,8 @@ handle_request_json(
     }
 ) ->
     {ok, App} = application:get_application(?MODULE),
-    LogicHandler = {{packageName}}_default_logic_handler,
-    {ok, ValidatorState} = application:get_env(App, LogicHandler),
+    LogicHandler = application:get_env(App, OperationID, application:get_env(App, ?MODULE, {{packageName}}_default_logic_handler)),
+    {ok, ValidatorState} = application:get_env(App, {{packageName}}_default_logic_handler),
 
     case {{packageName}}_api:populate_request(OperationID, Req0, ValidatorState) of
         {ok, Populated, Req1} ->
