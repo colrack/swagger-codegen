@@ -98,11 +98,20 @@ is_authorized(Req, State) ->
         Req :: cowboy_req:req(),
         State :: state()
     }.
-
-content_types_accepted(Req, State) ->
+{{#operations}}{{#operation}}
+content_types_accepted(
+    Req0,
+    State = #state{
+        operation_id = '{{operationId}}'
+    }
+) ->
     {[
-        {<<"application/json">>, handle_request_json}
-    ], Req, State}.
+        {{#hasConsumes}}{{=<% %>=}}{<%={{ }}=%>{{#consumes}}<<"{{{mediaType}}}">>, handle_request_json}{{#hasMore}},
+        {{=<% %>=}}{<%={{ }}=%>{{/hasMore}}{{/consumes}}{{/hasConsumes}}{{^hasConsumes}}{'*', handle_request_json}{{/hasConsumes}}
+    ], Req0, State};
+{{/operation}}{{/operations}}
+content_types_accepted(Req, State) ->
+    {{'*', handle_request_json} , Req, State}.
 
 -spec valid_content_headers(Req :: cowboy_req:req(), State :: state()) ->
     {Value :: boolean(), Req :: cowboy_req:req(), State :: state()}.
